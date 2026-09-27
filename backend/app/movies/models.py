@@ -16,6 +16,7 @@ from sqlalchemy import (
     Date,
     Double,
     ForeignKey,
+    Index,
     Integer,
     Numeric,
     String,
@@ -190,6 +191,10 @@ class FactMoviePerformance(Base):
     """Métricas financeiras e de engajamento; uma ocorrência por filme."""
 
     __tablename__ = "fact_movies_performance"
+    __table_args__ = (
+        # Permite ordenar o catálogo por popularidade percorrendo o índice.
+        Index("ix_fact_movies_performance_popularidade", "popularidade", "sk_movie_id"),
+    )
 
     sk_movie_id: Mapped[str] = mapped_column(
         String(64), ForeignKey("dim_movies.sk_movie_id", ondelete="CASCADE"), primary_key=True
@@ -213,7 +218,11 @@ class MovieReview(Base):
     """Avaliação individual de um filme na escala de 0 a 10."""
 
     __tablename__ = "movie_reviews"
-    __table_args__ = (CheckConstraint("nota >= 0 AND nota <= 10", name="nota_range"),)
+    __table_args__ = (
+        CheckConstraint("nota >= 0 AND nota <= 10", name="nota_range"),
+        # Índice de cobertura para agregações (média/contagem) por filme.
+        Index("ix_movie_reviews_sk_movie_id_nota", "sk_movie_id", "nota"),
+    )
 
     sk_movie_review_id: Mapped[str] = mapped_column(
         String(64), primary_key=True, default=generate_surrogate_key
