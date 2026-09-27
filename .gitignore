@@ -18,3 +18,9 @@ htmlcov/
 # Sistema operacional e IDE
 .DS_Store
 .vscode/
+
+# Dados brutos (CSVs da camada Diamond, ~223 MB) — distribuídos fora do Git
+backend/data/
+
+# Diretrizes locais do assistente de IA
+Claude.md
