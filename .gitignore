@@ -24,3 +24,7 @@ backend/data/
 
 # Diretrizes locais do assistente de IA
 Claude.md
+
+# Documentos locais (não versionados)
+requisitos.md
+README.md
