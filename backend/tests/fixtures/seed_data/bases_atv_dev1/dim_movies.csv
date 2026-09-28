@@ -1,0 +1,4 @@
+sk_movie_id,id_filme,titulo,data_lancamento,ano_lancamento,duracao_minutos,status_filme,sinopse,url_poster,url_backdrop
+m-rings,14564,Rings,2017-02-01,2017,102,Lançado,"""Julia fica preocupada com o """"filme dentro do filme"""".""",https://image.tmdb.org/t/p/w500/rings.jpg,https://image.tmdb.org/t/p/w1280/rings.jpg
+m-blessed,555,"""""""blessed""""""",2020-05-10,2020,90,Lançado,Um drama.,https://image.tmdb.org/t/p/w500/blessed.jpg,
+m-sem-poster,777,Sem Poster,2021-01-01,2021,80,Em Produção,,,

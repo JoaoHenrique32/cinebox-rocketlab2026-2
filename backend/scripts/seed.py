@@ -1,9 +1,12 @@
-"""Carga inicial dos CSVs da camada Diamond no banco criado pelo Alembic.
+"""Seed do banco: aplica as migrações e popula as tabelas com os CSVs da atividade.
 
 Uso (a partir de ``backend/``):
 
-    python -m scripts.load_csv            # falha se o banco já tiver dados
-    python -m scripts.load_csv --reset    # limpa as tabelas e recarrega tudo
+    python -m scripts.seed            # migra e popula; não faz nada se já houver dados
+    python -m scripts.seed --reset    # apaga os dados e popula de novo
+
+Os CSVs ficam em ``backend/data/`` (não versionados), nas pastas
+``bases_atv_dev1/`` (dimensões) e ``bases_atv_dev_2/`` (fato, bridges e avaliações).
 
 Decisões de projeto:
 
@@ -35,6 +38,8 @@ from itertools import islice
 from pathlib import Path
 from typing import Any
 
+from alembic import command as alembic_command
+from alembic.config import Config as AlembicConfig
 from sqlalchemy import Engine, Table, create_engine, delete, event, func, insert, select
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
@@ -54,12 +59,12 @@ from app.movies.models import (
     bridge_movie_person,
 )
 
-logger = logging.getLogger("load_csv")
+logger = logging.getLogger("seed")
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BACKEND_DIR / "data"
-DIMENSIONS_DIR = DATA_DIR / "bases_atv_dev1"
-FACTS_DIR = DATA_DIR / "bases_atv_dev_2"
+DIMENSIONS_SUBDIR = "bases_atv_dev1"
+FACTS_SUBDIR = "bases_atv_dev_2"
 BATCH_SIZE = 5_000
 
 Row = dict[str, str]
@@ -144,104 +149,109 @@ class CsvSource:
         return self.target if isinstance(self.target, Table) else self.target.__table__
 
 
-LOAD_PLAN: tuple[CsvSource, ...] = (
-    # Dimensões independentes
-    CsvSource(
-        DIMENSIONS_DIR / "dim_movies.csv",
-        DimMovie,
-        columns(
-            sk_movie_id=str,
-            id_filme=str,
-            titulo=clean_text,
-            data_lancamento=to_date,
-            ano_lancamento=to_int,
-            duracao_minutos=to_int,
-            status_filme=to_str,
-            sinopse=clean_text,
-            url_poster=to_str,
-            url_backdrop=to_str,
+def build_load_plan(data_dir: Path) -> tuple[CsvSource, ...]:
+    """Fontes na ordem de carga (ordem topológica das FKs)."""
+
+    dims = data_dir / DIMENSIONS_SUBDIR
+    facts = data_dir / FACTS_SUBDIR
+    return (
+        # Dimensões independentes
+        CsvSource(
+            dims / "dim_movies.csv",
+            DimMovie,
+            columns(
+                sk_movie_id=str,
+                id_filme=str,
+                titulo=clean_text,
+                data_lancamento=to_date,
+                ano_lancamento=to_int,
+                duracao_minutos=to_int,
+                status_filme=to_str,
+                sinopse=clean_text,
+                url_poster=to_str,
+                url_backdrop=to_str,
+            ),
         ),
-    ),
-    CsvSource(
-        DIMENSIONS_DIR / "dim_genres.csv",
-        DimGenre,
-        columns(sk_genre_id=str, nome_genero=str),
-    ),
-    CsvSource(
-        DIMENSIONS_DIR / "dim_companies.csv",
-        DimCompany,
-        columns(sk_company_id=str, nome_produtora=str),
-    ),
-    CsvSource(
-        DIMENSIONS_DIR / "dim_people.csv",
-        DimPerson,
-        columns(sk_person_id=str, nome_pessoa=str, tipo_pessoa=str),
-    ),
-    # Dependentes de dim_movies (e das demais dimensões, no caso das bridges)
-    CsvSource(
-        DIMENSIONS_DIR / "dim_reviews.csv",
-        DimReview,
-        columns(
-            sk_review_id=str,
-            sk_movie_id=str,
-            qtd_avaliacoes_usuarios=to_int,
-            nota_media_usuarios=to_float,
+        CsvSource(
+            dims / "dim_genres.csv",
+            DimGenre,
+            columns(sk_genre_id=str, nome_genero=str),
         ),
-    ),
-    CsvSource(
-        FACTS_DIR / "fact_movies_performance.csv",
-        FactMoviePerformance,
-        columns(
-            sk_movie_id=str,
-            orcamento_usd=to_decimal,
-            receita_usd=to_decimal,
-            lucro_usd=to_decimal,
-            orcamento_brl=to_decimal,
-            receita_brl=to_decimal,
-            lucro_brl=to_decimal,
-            popularidade=to_float,
-            nota_tmdb=to_float,
-            qtd_tmdb=to_int,
-            nota_imdb=to_float,
-            qtd_imdb=to_int,
+        CsvSource(
+            dims / "dim_companies.csv",
+            DimCompany,
+            columns(sk_company_id=str, nome_produtora=str),
         ),
-    ),
-    CsvSource(
-        FACTS_DIR / "bridge_movie_genre.csv",
-        bridge_movie_genre,
-        columns(sk_movie_id=str, sk_genre_id=str),
-    ),
-    CsvSource(
-        FACTS_DIR / "bridge_movie_company.csv",
-        bridge_movie_company,
-        columns(sk_movie_id=str, sk_company_id=str),
-    ),
-    CsvSource(
-        FACTS_DIR / "bridge_movie_person.csv",
-        bridge_movie_person,
-        columns(sk_movie_id=str, sk_person_id=str),
-    ),
-    CsvSource(
-        FACTS_DIR / "movies_reviews.csv",
-        MovieReview,
-        columns(
-            sk_movie_review_id=str,
-            sk_movie_id=str,
-            nome=str,
-            nota=float,
-            comentario=str,
+        CsvSource(
+            dims / "dim_people.csv",
+            DimPerson,
+            columns(sk_person_id=str, nome_pessoa=str, tipo_pessoa=str),
         ),
-    ),
-)
+        # Dependentes de dim_movies (e das demais dimensões, no caso das bridges)
+        CsvSource(
+            dims / "dim_reviews.csv",
+            DimReview,
+            columns(
+                sk_review_id=str,
+                sk_movie_id=str,
+                qtd_avaliacoes_usuarios=to_int,
+                nota_media_usuarios=to_float,
+            ),
+        ),
+        CsvSource(
+            facts / "fact_movies_performance.csv",
+            FactMoviePerformance,
+            columns(
+                sk_movie_id=str,
+                orcamento_usd=to_decimal,
+                receita_usd=to_decimal,
+                lucro_usd=to_decimal,
+                orcamento_brl=to_decimal,
+                receita_brl=to_decimal,
+                lucro_brl=to_decimal,
+                popularidade=to_float,
+                nota_tmdb=to_float,
+                qtd_tmdb=to_int,
+                nota_imdb=to_float,
+                qtd_imdb=to_int,
+            ),
+        ),
+        CsvSource(
+            facts / "bridge_movie_genre.csv",
+            bridge_movie_genre,
+            columns(sk_movie_id=str, sk_genre_id=str),
+        ),
+        CsvSource(
+            facts / "bridge_movie_company.csv",
+            bridge_movie_company,
+            columns(sk_movie_id=str, sk_company_id=str),
+        ),
+        CsvSource(
+            facts / "bridge_movie_person.csv",
+            bridge_movie_person,
+            columns(sk_movie_id=str, sk_person_id=str),
+        ),
+        CsvSource(
+            facts / "movies_reviews.csv",
+            MovieReview,
+            columns(
+                sk_movie_review_id=str,
+                sk_movie_id=str,
+                nome=str,
+                nota=float,
+                comentario=str,
+            ),
+        ),
+    )
 
 
 # --------------------------------------------------------------------------- #
 # Infraestrutura
 # --------------------------------------------------------------------------- #
-def build_sync_engine() -> Engine:
-    """Engine síncrona apontando para o mesmo banco configurado para a API."""
+def build_sync_engine(database_url: str | None = None) -> Engine:
+    """Engine síncrona; por padrão aponta para o mesmo banco configurado para a API."""
 
-    url = make_url(get_settings().database_url)
+    url = make_url(database_url or get_settings().database_url)
     sync_url = url.set(drivername=url.get_backend_name())  # sqlite+aiosqlite -> sqlite
     if sync_url.database and not Path(sync_url.database).is_absolute():
         # Resolve relativo a backend/, independente do diretório de execução.
@@ -256,6 +266,15 @@ def build_sync_engine() -> Engine:
         cursor.close()
 
     return engine
+
+
+def apply_migrations() -> None:
+    """Equivalente a ``alembic upgrade head``: garante que as tabelas existam."""
+
+    # Config sem arquivo .ini: evita que o Alembic reconfigure o logging do script.
+    config = AlembicConfig()
+    config.set_main_option("script_location", str(BACKEND_DIR / "migrations"))
+    alembic_command.upgrade(config, "head")
 
 
 def read_csv(path: Path) -> Iterator[Row]:
@@ -275,12 +294,12 @@ def count_rows(session: Session, table: Table) -> int:
 # --------------------------------------------------------------------------- #
 # Casos de uso
 # --------------------------------------------------------------------------- #
-def reset_tables(session: Session) -> None:
-    """Esvazia as tabelas em ordem reversa das FKs."""
+@dataclass(frozen=True, slots=True)
+class SeedReport:
+    """Resultado do seed: se a carga rodou e quantas linhas cada tabela tem."""
 
-    for source in reversed(LOAD_PLAN):
-        session.execute(delete(source.table))
-    logger.info("Tabelas esvaziadas.")
+    loaded: bool
+    row_counts: dict[str, int]
 
 
 def load_source(session: Session, source: CsvSource) -> int:
@@ -300,31 +319,41 @@ def load_source(session: Session, source: CsvSource) -> int:
     return total
 
 
-def run(*, reset: bool) -> None:
-    missing = [str(s.path) for s in LOAD_PLAN if not s.path.exists()]
+def seed_database(engine: Engine, data_dir: Path = DATA_DIR, *, reset: bool = False) -> SeedReport:
+    """Popula o banco a partir dos CSVs de ``data_dir``.
+
+    Idempotente: se já houver filmes e ``reset`` for falso, nada é alterado.
+    Toda a carga roda em uma única transação (tudo ou nada).
+    """
+
+    plan = build_load_plan(data_dir)
+    missing = [str(source.path) for source in plan if not source.path.exists()]
     if missing:
         raise FileNotFoundError("CSVs ausentes:\n  " + "\n  ".join(missing))
 
-    engine = build_sync_engine()
-    started = time.perf_counter()
-    try:
-        with Session(engine) as session, session.begin():
-            if reset:
-                reset_tables(session)
-            elif count_rows(session, DimMovie.__table__):
-                raise RuntimeError("O banco já contém filmes. Use --reset para recarregar do zero.")
+    loaded = False
+    with Session(engine) as session, session.begin():
+        if reset:
+            # Esvazia em ordem reversa das FKs.
+            for source in reversed(plan):
+                session.execute(delete(source.table))
+            logger.info("Tabelas esvaziadas.")
 
-            for source in LOAD_PLAN:
+        if reset or count_rows(session, DimMovie.__table__) == 0:
+            for source in plan:
                 load_source(session, source)
+            loaded = True
+        else:
+            logger.info("O banco já está populado; nada a fazer (use --reset para recarregar).")
 
+        row_counts = {source.table.name: count_rows(session, source.table) for source in plan}
+
+    if loaded:
         # Atualiza as estatísticas do otimizador de consultas após a carga em massa.
         with engine.connect() as connection:
             connection.exec_driver_sql("ANALYZE")
-        # session.begin() faz commit ao sair sem exceção e rollback caso contrário.
-    finally:
-        engine.dispose()
 
-    logger.info("Carga concluída em %.1fs.", time.perf_counter() - started)
+    return SeedReport(loaded=loaded, row_counts=row_counts)
 
 
 def main() -> int:
@@ -332,18 +361,30 @@ def main() -> int:
     parser.add_argument(
         "--reset",
         action="store_true",
-        help="apaga os dados existentes antes de carregar",
+        help="apaga os dados existentes antes de popular",
     )
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s  %(message)s")
     csv.field_size_limit(sys.maxsize if sys.maxsize < 2**31 else 2**31 - 1)
 
+    started = time.perf_counter()
+    logger.info("Aplicando migrações...")
+    apply_migrations()
+
+    engine = build_sync_engine()
     try:
-        run(reset=args.reset)
-    except (FileNotFoundError, RuntimeError) as exc:
+        report = seed_database(engine, reset=args.reset)
+    except FileNotFoundError as exc:
         logger.error("%s", exc)
+        logger.error("Coloque os CSVs da atividade em %s (veja o README).", DATA_DIR)
         return 1
+    finally:
+        engine.dispose()
+
+    logger.info("Seed concluído em %.1fs. Linhas por tabela:", time.perf_counter() - started)
+    for table, rows in report.row_counts.items():
+        logger.info("  %-26s %9d", table, rows)
     return 0
 
 

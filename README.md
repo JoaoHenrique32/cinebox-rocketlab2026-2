@@ -63,10 +63,12 @@ source .venv/bin/activate
 
 pip install -e ".[dev]"
 cp .env.example .env          # no Windows (cmd): copy .env.example .env
-alembic upgrade head          # cria as tabelas
 ```
 
-### 2. Carga dos dados
+### 2. Seed do banco de dados
+
+O seed cria as tabelas (aplica as migrações do Alembic) e popula o banco com os
+dados da atividade, para que a aplicação não comece vazia.
 
 Coloque os CSVs em `backend/data/`, mantendo as duas pastas originais:
 
@@ -79,8 +81,16 @@ backend/data/
 Depois, ainda na pasta `backend` com o ambiente virtual ativo:
 
 ```bash
-python -m scripts.load_csv            # leva alguns minutos (~1,6 milhão de linhas)
-python -m scripts.load_csv --reset    # para apagar tudo e carregar de novo
+python -m scripts.seed
+```
+
+A primeira execução leva alguns minutos (são ~1,6 milhão de linhas) e termina
+mostrando quantas linhas cada tabela recebeu. O comando é seguro para rodar de
+novo: se o banco já estiver populado, nada é alterado. Para apagar tudo e
+popular do zero:
+
+```bash
+python -m scripts.seed --reset
 ```
 
 ### 3. Subir a API
@@ -120,6 +130,11 @@ cd frontend
 npm test
 ```
 
+No backend, `tests/test_seed.py` roda o seed sobre uma amostra dos CSVs
+(`tests/fixtures/seed_data`) e confere se filmes, gêneros e seus relacionamentos
+foram populados corretamente. Depois de rodar o seed de verdade, o mesmo arquivo
+também valida o banco real (antes disso, esse teste aparece como *skipped*).
+
 ## Endpoints principais
 
 Todos com o prefixo `/api/v1`:
@@ -149,7 +164,7 @@ Todos com o prefixo `/api/v1`:
 │   │       ├── schemas/    DTOs Pydantic
 │   │       └── crud/       regras de negócio e consultas
 │   ├── migrations/         Alembic
-│   ├── scripts/            carga dos CSVs
+│   ├── scripts/            seed do banco (seed.py)
 │   ├── tests/
 │   └── ARCHITECTURE.md     decisões de arquitetura do backend
 └── frontend/

@@ -113,7 +113,16 @@ api/  ──►  crud/  ──►  models.py (ORM)  ──►  SQLite
   (`PRAGMA foreign_keys=ON` em toda conexão). Bridges, fato e avaliações caem
   junto sem que as coleções sejam carregadas.
 
-## 7. Carga inicial (`scripts/load_csv.py`)
+## 7. Seed do banco (`scripts/seed.py`)
+
+- **Comando único**: `python -m scripts.seed` aplica as migrações (equivalente a
+  `alembic upgrade head`) e popula o banco a partir de `backend/data/`.
+- **Idempotente**: se já houver filmes, o seed não altera nada. `--reset`
+  esvazia as tabelas (ordem reversa das FKs) e popula de novo. Ao final, o
+  comando mostra a contagem de linhas por tabela.
+- A carga é parametrizada pela pasta de dados e pela engine
+  (`seed_database(engine, data_dir)`), o que permite testá-la com uma amostra
+  dos CSVs (`tests/fixtures/seed_data`) em um SQLite temporário.
 
 - Engine **síncrona**, derivada da mesma `DATABASE_URL` da API. Async não traz
   ganho numa carga sequencial.
@@ -121,8 +130,7 @@ api/  ──►  crud/  ──►  models.py (ORM)  ──►  SQLite
   5.000. Um objeto ORM por linha seria inviável para ~1,6 M linhas.
   A regra "relacionamentos via ORM" vale para o `crud/`, não para o ETL.
 - **Uma única transação**, na ordem topológica das FKs: tudo ou nada.
-- Recusa rodar sobre um banco já populado (`--reset` para recarregar) e
-  executa `ANALYZE` ao final.
+- Executa `ANALYZE` após a carga, para o otimizador usar os índices novos.
 - Limpeza de dados: remove o escape duplo de aspas em títulos (55) e sinopses
   (4.801). Nomes de pessoas e produtoras com lixo de parsing upstream são
   mantidos: não são recuperáveis com segurança e colidiriam com as `UNIQUE`.
@@ -160,6 +168,10 @@ api/  ──►  crud/  ──►  models.py (ORM)  ──►  SQLite
 - `tests/test_crud.py` cobre as regras de domínio: conversão de escala,
   cascade, get-or-create de diretores, PATCH parcial, escape da busca e
   paginação.
+- `tests/test_seed.py` roda o seed sobre a amostra de CSVs e confere
+  contagens, relacionamentos N:N, limpeza de dados, integridade das FKs e
+  idempotência. Um teste extra valida o banco real e é pulado enquanto ele não
+  foi populado.
 - `tests/test_api.py` faz a integração HTTP via `httpx.ASGITransport`,
   sobrescrevendo `get_db`. Cobre status codes, validação de query e payload,
   ciclo de vida do filme e a média atualizada após uma nova avaliação.
