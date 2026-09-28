@@ -105,3 +105,18 @@ async def test_list_genres(client: httpx.AsyncClient) -> None:
 
     assert response.status_code == 200
     assert [g["nome"] for g in response.json()] == ["Drama", "Horror"]
+
+
+async def test_list_release_years_is_distinct_sorted_and_tracks_writes(
+    client: httpx.AsyncClient,
+) -> None:
+    response = await client.get(f"{API}/movies/years")
+
+    assert response.status_code == 200
+    # O filme sem ano fica de fora da lista.
+    assert response.json() == [2021, 2017]
+
+    created = await client.post(f"{API}/movies", json={"titulo": "Antigo", "ano_lancamento": 1950})
+    assert created.status_code == 201
+    # A escrita invalida o cache, então o novo ano aparece imediatamente.
+    assert (await client.get(f"{API}/movies/years")).json() == [2021, 2017, 1950]

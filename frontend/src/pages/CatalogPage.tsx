@@ -1,15 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { getErrorMessage } from '../api/client'
-import { listGenres, listMovies } from '../api/movies'
+import { listGenres, listMovies, listReleaseYears } from '../api/movies'
 import { SORT_OPTIONS, type Genre, type MovieSort, type MovieSummary, type Page } from '../api/types'
 import { MovieCard } from '../components/MovieCard'
 import { Pagination } from '../components/Pagination'
 import { SearchBar } from '../components/SearchBar'
 
 const PAGE_SIZE = 24
-const currentYear = new Date().getFullYear()
-const YEARS = Array.from({ length: currentYear + 5 - 1950 }, (_, i) => currentYear + 5 - i)
 
 const selectClass = 'bg-card border-borda w-full rounded border px-2 py-2 text-sm text-white'
 
@@ -25,14 +23,21 @@ export function CatalogPage() {
 
   const [movies, setMovies] = useState<Page<MovieSummary> | null>(null)
   const [genres, setGenres] = useState<Genre[]>([])
+  const [years, setYears] = useState<number[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
-  // Busca os gêneros uma vez só, para preencher o filtro
+  // Busca os gêneros e os anos uma vez só, para preencher os filtros.
+  // Se falhar, o filtro fica só com a opção "Todos" e o catálogo segue funcionando.
   useEffect(() => {
+    const controller = new AbortController()
     listGenres()
       .then(setGenres)
       .catch(() => setGenres([]))
+    listReleaseYears(controller.signal)
+      .then(setYears)
+      .catch(() => setYears([]))
+    return () => controller.abort()
   }, [])
 
   // Recarrega os filmes sempre que algum filtro da URL mudar
@@ -120,7 +125,7 @@ export function CatalogPage() {
             aria-label="Ano"
           >
             <option value="">Todos os anos</option>
-            {YEARS.map((y) => (
+            {years.map((y) => (
               <option key={y} value={y}>
                 {y}
               </option>

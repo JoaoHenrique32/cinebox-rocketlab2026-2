@@ -38,6 +38,16 @@ async def list_movies(
     return await movie_crud.list_movies(session, filters=query, params=query)
 
 
+@router.get(
+    "/years",
+    response_model=list[int],
+    summary="Anos de lançamento com filmes cadastrados (mais recentes primeiro)",
+)
+async def list_release_years(session: SessionDep) -> list[int]:
+    # Declarada antes de "/{movie_id}" para não ser capturada como um id.
+    return await movie_crud.list_release_years(session)
+
+
 @router.post(
     "",
     response_model=MovieDetail,

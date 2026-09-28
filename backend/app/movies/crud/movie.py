@@ -14,7 +14,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.exceptions import InvalidReferenceError, NotFoundError
-from app.movies.crud.cache import catalog_cache, catalog_key, invalidate_catalog
+from app.movies.crud.cache import (
+    YEARS_KEY,
+    catalog_cache,
+    catalog_key,
+    invalidate_catalog,
+    years_cache,
+)
 from app.movies.crud.review import get_rating_summaries, get_rating_summary
 from app.movies.models import (
     DimGenre,
@@ -182,6 +188,28 @@ async def _load_movie(session: AsyncSession, movie_id: str) -> DimMovie:
 async def get_movie(session: AsyncSession, movie_id: str) -> MovieDetail:
     movie = await _load_movie(session, movie_id)
     return _to_detail(movie, await get_rating_summary(session, movie_id))
+
+
+async def list_release_years(session: AsyncSession) -> list[int]:
+    """Anos de lançamento distintos presentes no catálogo, do mais recente ao mais antigo.
+
+    Alimenta o filtro de ano do frontend, evitando opções que levariam a uma
+    busca vazia. O ``DISTINCT`` é resolvido pelo índice ``ix_dim_movies_ano_lancamento``.
+    """
+
+    if (cached := years_cache.get(YEARS_KEY)) is not None:
+        return cached
+
+    years = list(
+        await session.scalars(
+            select(DimMovie.ano_lancamento)
+            .where(DimMovie.ano_lancamento.is_not(None))
+            .distinct()
+            .order_by(DimMovie.ano_lancamento.desc())
+        )
+    )
+    years_cache.set(YEARS_KEY, years)
+    return years
 
 
 async def list_genres(session: AsyncSession) -> list[GenreRead]:

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as moviesApi from '../api/movies'
@@ -37,6 +37,7 @@ describe('CatalogPage', () => {
   beforeEach(() => {
     vi.mocked(moviesApi.listGenres).mockResolvedValue([{ id: 'g1', nome: 'Drama' }])
     vi.mocked(moviesApi.listMovies).mockResolvedValue(page)
+    vi.mocked(moviesApi.listReleaseYears).mockResolvedValue([2024, 1999])
   })
 
   it('lista os filmes com a nota de 0 a 10', async () => {
@@ -65,5 +66,18 @@ describe('CatalogPage', () => {
       expect.objectContaining({ q: 'matrix', genero_id: 'g1', page: 2 }),
       expect.any(AbortSignal),
     )
+  })
+
+  it('preenche o filtro de ano apenas com os anos vindos da API', async () => {
+    render(
+      <MemoryRouter>
+        <CatalogPage />
+      </MemoryRouter>,
+    )
+
+    const select = screen.getByRole('combobox', { name: 'Ano' })
+    expect(await within(select).findByRole('option', { name: '2024' })).toBeInTheDocument()
+    const options = within(select).getAllByRole('option').map((o) => o.textContent)
+    expect(options).toEqual(['Todos os anos', '2024', '1999'])
   })
 })

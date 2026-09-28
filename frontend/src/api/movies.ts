@@ -16,6 +16,12 @@ export async function listMovies(filters: MovieFilters, signal?: AbortSignal) {
   return response.data
 }
 
+// Só os anos que existem no banco, para o filtro nunca levar a uma busca vazia
+export async function listReleaseYears(signal?: AbortSignal) {
+  const response = await api.get<number[]>('/movies/years', { signal })
+  return response.data
+}
+
 export async function getMovie(id: string, signal?: AbortSignal) {
   const response = await api.get<MovieDetail>(`/movies/${id}`, { signal })
   return response.data
