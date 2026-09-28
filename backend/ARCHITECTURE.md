@@ -29,13 +29,13 @@ api/  ──►  crud/  ──►  models.py (ORM)  ──►  SQLite
 
 ## 2. Escala de notas
 
-- O banco (`movie_reviews.nota`) armazena **0–10**; a API expõe **estrelas 0–5**.
-- A conversão existe em um único lugar: `app/movies/crud/rating.py`
-  (`to_stars`, `to_db_score`; fator 2).
-- Entrada (`ReviewCreate.estrelas`): **1 a 5, em passos de 0,5**, como no
-  Letterboxd. Toda nota aceita é um inteiro de 0 a 10 no banco.
-- Saída: pode ser menor que 1, porque notas históricas do CSV e médias usam
-  a escala completa.
+- **Tudo em 0–10**: banco (`movie_reviews.nota`), API e frontend. A
+  orientação oficial da atividade manda seguir as models (0 a 10) em vez do
+  documento (0 a 5).
+- Como as escalas coincidem, **não há camada de conversão**: a nota enviada é
+  gravada como veio, e as médias são arredondadas para 2 casas no CRUD.
+- Entrada (`ReviewCreate.nota`) e saída (`ReviewRead.nota`,
+  `RatingSummary.nota_media`) usam o mesmo tipo `Score` (`0 ≤ nota ≤ 10`).
 
 ## 3. Média de avaliações
 

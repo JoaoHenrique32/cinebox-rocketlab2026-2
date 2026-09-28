@@ -31,7 +31,7 @@ async def test_list_movies_with_query_params(client: httpx.AsyncClient) -> None:
     body = response.json()
     assert body["total"] == 1
     assert body["items"][0]["titulo"] == "Rings"
-    assert body["items"][0]["avaliacao"] == {"media_estrelas": 3.5, "total_avaliacoes": 2}
+    assert body["items"][0]["avaliacao"] == {"nota_media": 7.0, "total_avaliacoes": 2}
 
 
 @pytest.mark.parametrize(
@@ -79,22 +79,22 @@ async def test_reviews_flow_updates_average(
 ) -> None:
     url = f"{API}/movies/{seeded['rings']}/reviews"
 
-    created = await client.post(url, json={"nome": "Admin", "estrelas": 5, "comentario": "Top"})
-    invalid = await client.post(url, json={"nome": "Admin", "estrelas": 6, "comentario": "X"})
+    created = await client.post(url, json={"nome": "Admin", "nota": 10, "comentario": "Top"})
+    invalid = await client.post(url, json={"nome": "Admin", "nota": 11, "comentario": "X"})
     listing = await client.get(url, params={"size": 10})
     detail = await client.get(f"{API}/movies/{seeded['rings']}")
 
     assert created.status_code == 201
-    assert created.json()["estrelas"] == 5
+    assert created.json()["nota"] == 10
     assert invalid.status_code == 422
     assert listing.json()["total"] == 3
-    # (8 + 6 + 10) / 3 = 8.0 -> 4.0 estrelas
-    assert detail.json()["avaliacao"] == {"media_estrelas": 4.0, "total_avaliacoes": 3}
+    # (8 + 6 + 10) / 3 = 8.0
+    assert detail.json()["avaliacao"] == {"nota_media": 8.0, "total_avaliacoes": 3}
 
 
 async def test_reviews_of_unknown_movie_return_404(client: httpx.AsyncClient) -> None:
     response = await client.post(
-        f"{API}/movies/nope/reviews", json={"nome": "A", "estrelas": 3, "comentario": "B"}
+        f"{API}/movies/nope/reviews", json={"nome": "A", "nota": 3, "comentario": "B"}
     )
 
     assert response.status_code == 404

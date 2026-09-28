@@ -96,7 +96,7 @@ async def list_reviews(
     response_model=ReviewRead,
     status_code=status.HTTP_201_CREATED,
     responses=NOT_FOUND,
-    summary="Adiciona uma avaliação (1 a 5 estrelas)",
+    summary="Adiciona uma avaliação (nota de 0 a 10)",
 )
 async def create_review(session: SessionDep, movie_id: str, payload: ReviewCreate) -> ReviewRead:
     return await review_crud.create_review(session, movie_id, payload)

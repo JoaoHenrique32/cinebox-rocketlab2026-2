@@ -32,9 +32,9 @@ async def test_list_movies_defaults_to_popularity_with_star_average(
 
     assert [m.titulo for m in page.items] == ["Mixtape", "Rings", "100% Wolf"]
     rings = page.items[1]
-    assert rings.avaliacao.media_estrelas == 3.5  # (8 + 6) / 2 = 7.0 -> 3.5 estrelas
+    assert rings.avaliacao.nota_media == 7.0  # (8 + 6) / 2
     assert rings.avaliacao.total_avaliacoes == 2
-    assert page.items[2].avaliacao.media_estrelas is None
+    assert page.items[2].avaliacao.nota_media is None
     assert [g.nome for g in rings.generos] == ["Horror"]
 
 
@@ -159,26 +159,31 @@ async def test_delete_movie_cascades(session: AsyncSession, seeded: dict[str, st
 # --------------------------------------------------------------------------- #
 
 
-async def test_create_review_stores_db_scale_and_returns_stars(
+async def test_create_review_keeps_0_to_10_scale(
     session: AsyncSession, seeded: dict[str, str]
 ) -> None:
     review = await review_crud.create_review(
         session,
         seeded["percent"],
-        ReviewCreate(nome="Admin", estrelas=4.5, comentario="Ótimo"),
+        ReviewCreate(nome="Admin", nota=8.5, comentario="Ótimo"),
     )
 
     stored = await session.scalar(select(MovieReview.nota).where(MovieReview.nome == "Admin"))
-    assert stored == 9.0
-    assert review.estrelas == 4.5
+    assert stored == 8.5  # gravada sem conversão
+    assert review.nota == 8.5
     summary = await review_crud.get_rating_summary(session, seeded["percent"])
-    assert (summary.media_estrelas, summary.total_avaliacoes) == (4.5, 1)
+    assert (summary.nota_media, summary.total_avaliacoes) == (8.5, 1)
 
 
-@pytest.mark.parametrize("stars", [0, 0.5, 5.5, 3.3])
-def test_review_schema_rejects_out_of_scale_stars(stars: float) -> None:
+@pytest.mark.parametrize("nota", [0, 7.5, 10])
+def test_review_schema_accepts_full_scale(nota: float) -> None:
+    assert ReviewCreate(nome="X", nota=nota, comentario="Y").nota == nota
+
+
+@pytest.mark.parametrize("nota", [-0.5, 10.5, 11])
+def test_review_schema_rejects_out_of_scale(nota: float) -> None:
     with pytest.raises(ValidationError):
-        ReviewCreate(nome="X", estrelas=stars, comentario="Y")
+        ReviewCreate(nome="X", nota=nota, comentario="Y")
 
 
 async def test_list_reviews_paginates_and_checks_movie(

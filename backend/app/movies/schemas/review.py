@@ -1,20 +1,17 @@
-"""DTOs de avaliações. Toda nota exposta aqui está na escala de 1 a 5 estrelas."""
+"""DTOs de avaliações. Notas na escala de 0 a 10, a mesma do banco (``movie_reviews``)."""
 
 from datetime import datetime
 from typing import Annotated
 
 from pydantic import BaseModel, Field, StringConstraints
 
-Stars = Annotated[float, Field(ge=1, le=5, multiple_of=0.5)]
-"""Nota de entrada: 1 a 5 estrelas, com meia estrela (como no Letterboxd)."""
-
-StarsAverage = Annotated[float, Field(ge=0, le=5)]
-"""Nota de saída: médias e notas históricas do CSV podem ficar abaixo de 1."""
+Score = Annotated[float, Field(ge=0, le=10)]
+"""Nota de 0 a 10, conforme definido nas models (orientação oficial da atividade)."""
 
 
 class ReviewCreate(BaseModel):
     nome: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)]
-    estrelas: Stars
+    nota: Score
     comentario: Annotated[
         str, StringConstraints(strip_whitespace=True, min_length=1, max_length=4000)
     ]
@@ -23,13 +20,13 @@ class ReviewCreate(BaseModel):
 class ReviewRead(BaseModel):
     id: str
     nome: str
-    estrelas: StarsAverage
+    nota: Score
     comentario: str
     created_at: datetime
 
 
 class RatingSummary(BaseModel):
-    """Média geral e quantidade de avaliações de um filme."""
+    """Média geral (0 a 10) e quantidade de avaliações de um filme."""
 
-    media_estrelas: StarsAverage | None
+    nota_media: Score | None
     total_avaliacoes: int

@@ -6,7 +6,6 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundError
-from app.movies.crud.rating import to_db_score, to_stars
 from app.movies.models import DimMovie, MovieReview
 from app.movies.schemas import Page, PageParams, RatingSummary, ReviewCreate, ReviewRead
 
@@ -15,15 +14,15 @@ def to_review_read(review: MovieReview) -> ReviewRead:
     return ReviewRead(
         id=review.sk_movie_review_id,
         nome=review.nome,
-        estrelas=to_stars(review.nota),
+        nota=review.nota,
         comentario=review.comentario,
         created_at=review.created_at,
     )
 
 
-def to_rating_summary(db_average: float | None, total: int | None) -> RatingSummary:
+def to_rating_summary(average: float | None, total: int | None) -> RatingSummary:
     return RatingSummary(
-        media_estrelas=to_stars(db_average) if db_average is not None else None,
+        nota_media=round(average, 2) if average is not None else None,
         total_avaliacoes=total or 0,
     )
 
@@ -87,7 +86,7 @@ async def create_review(session: AsyncSession, movie_id: str, data: ReviewCreate
     review = MovieReview(
         sk_movie_id=movie_id,
         nome=data.nome,
-        nota=to_db_score(data.estrelas),
+        nota=data.nota,
         comentario=data.comentario,
     )
     session.add(review)

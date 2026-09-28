@@ -16,8 +16,8 @@ Decisões de projeto:
 - **Uma única transação**: ou o banco fica completamente populado, ou nada é
   gravado. As tabelas são carregadas em ordem topológica das chaves estrangeiras
   (dimensões -> fato/bridges -> avaliações), com ``PRAGMA foreign_keys=ON``.
-- As notas de ``movies_reviews.csv`` são mantidas na escala 0-10 do banco; a
-  conversão para 1-5 estrelas é responsabilidade exclusiva da camada ``crud/``.
+- As notas de ``movies_reviews.csv`` já estão na escala 0-10, a mesma usada
+  pela API e pelo frontend: nenhuma conversão é necessária.
 """
 
 from __future__ import annotations
