@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.exceptions import InvalidReferenceError, NotFoundError
+from app.movies.crud.cache import catalog_cache, catalog_key, invalidate_catalog
 from app.movies.crud.review import get_rating_summaries, get_rating_summary
 from app.movies.models import (
     DimGenre,
@@ -131,7 +132,16 @@ def _catalog_query(filters: MovieFilters) -> Select[tuple[DimMovie]]:
 async def list_movies(
     session: AsyncSession, filters: MovieFilters, params: PageParams
 ) -> Page[MovieSummary]:
-    """Catálogo paginado com busca por título, filtros e média de avaliações."""
+    """Catálogo paginado com busca por título, filtros e média de avaliações.
+
+    Resultados ficam em cache por alguns segundos (``catalog_cache``): a mesma
+    página é pedida muitas vezes (paginação, voltar do navegador) e o catálogo
+    só muda quando há escrita, que invalida o cache.
+    """
+
+    key = catalog_key(filters, params)
+    if (cached := catalog_cache.get(key)) is not None:
+        return cached
 
     stmt = _catalog_query(filters)
     total = await session.scalar(select(func.count()).select_from(stmt.order_by(None).subquery()))
@@ -147,7 +157,9 @@ async def list_movies(
         MovieSummary.model_validate(_summary_payload(movie, ratings[movie.sk_movie_id]))
         for movie in movies
     ]
-    return Page[MovieSummary].build(items, total or 0, params)
+    page = Page[MovieSummary].build(items, total or 0, params)
+    catalog_cache.set(key, page)
+    return page
 
 
 async def _load_movie(session: AsyncSession, movie_id: str) -> DimMovie:
@@ -232,6 +244,7 @@ async def create_movie(session: AsyncSession, data: MovieCreate) -> MovieDetail:
 
     session.add(movie)
     await session.commit()
+    invalidate_catalog()
     return await get_movie(session, movie.sk_movie_id)
 
 
@@ -250,6 +263,7 @@ async def update_movie(session: AsyncSession, movie_id: str, data: MovieUpdate) 
         movie.people = others + await _resolve_directors(session, data.diretores)
 
     await session.commit()
+    invalidate_catalog()
     return await get_movie(session, movie_id)
 
 
@@ -264,3 +278,4 @@ async def delete_movie(session: AsyncSession, movie_id: str) -> None:
         await session.rollback()
         raise NotFoundError(f"Filme {movie_id} não encontrado")
     await session.commit()
+    invalidate_catalog()

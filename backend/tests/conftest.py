@@ -8,6 +8,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.db.base import Base
 from app.db.session import enable_sqlite_foreign_keys
+from app.movies.crud.cache import invalidate_catalog
 from app.movies.models import (
     DimGenre,
     DimMovie,
@@ -15,6 +16,13 @@ from app.movies.models import (
     FactMoviePerformance,
     MovieReview,
 )
+
+
+@pytest.fixture(autouse=True)
+def _clear_catalog_cache() -> None:
+    """O cache é global ao processo: cada teste começa sem resultados guardados."""
+
+    invalidate_catalog()
 
 
 @pytest.fixture

@@ -66,6 +66,17 @@ api/  ──►  crud/  ──►  models.py (ORM)  ──►  SQLite
 - Busca: `ILIKE` no título, com `%`, `_` e `\` escapados. Filtros por gênero
   (`EXISTS` na bridge) e por ano.
 
+### Cache em memória (`app/core/cache.py`, `app/movies/crud/cache.py`)
+
+- As páginas de `GET /movies` ficam em um `TTLCache` (60 s por padrão,
+  `CATALOG_CACHE_TTL_SECONDS`, até 256 entradas). A chave é a combinação de
+  filtros, ordenação e paginação.
+- **A invalidação é explícita**: criar, editar ou remover um filme e criar uma
+  avaliação limpam o cache, já que a média aparece nos cards. O TTL é só uma
+  rede de segurança.
+- O cache é por processo, o que basta para um único worker com SQLite. Com
+  vários workers, o próximo passo seria um cache compartilhado (Redis).
+
 ### Índices adicionados (migração `dccf1d8c36b3`)
 
 | Índice | Uso | Efeito medido |

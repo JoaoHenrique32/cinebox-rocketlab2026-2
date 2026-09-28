@@ -6,6 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundError
+from app.movies.crud.cache import invalidate_catalog
 from app.movies.models import DimMovie, MovieReview
 from app.movies.schemas import Page, PageParams, RatingSummary, ReviewCreate, ReviewRead
 
@@ -91,5 +92,6 @@ async def create_review(session: AsyncSession, movie_id: str, data: ReviewCreate
     )
     session.add(review)
     await session.commit()
+    invalidate_catalog()  # a média do filme mudou
     await session.refresh(review)  # carrega created_at (server_default)
     return to_review_read(review)
